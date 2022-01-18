@@ -1,0 +1,20 @@
+version: "3"
+
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:7.4.2
+    # Custom base root
+    command: "gotenberg --api-root-path=/pdf-gotenberg/ --api-timeout=600s --unoconv-disable-listener=true"
+    shm_size: "4gb"
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: "go run ."
+    environment:
+      - API_ROOT=/pdf-gotenberg
+    ports:
+      - "3000:3000"
+    working_dir: "/app"
+    volumes:
+      - "./:/app"
