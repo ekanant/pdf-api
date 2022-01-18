@@ -21,12 +21,13 @@ FROM alpine:3.13.5
 #Install dependencies
 RUN apk --no-cache add ghostscript 
 
-COPY --from=builder --chown=app:app /app/out/app_program /app/app_program
-COPY --from=builder --chown=app:app /app/scripts/shrinkpdf.sh /app/scripts/shrinkpdf.sh
-
 WORKDIR /app
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 RUN chown -R app:app /app
+
+COPY --from=builder --chown=app:app /app/out/app_program /app/app_program
+COPY --from=builder --chown=app:app /app/scripts/shrinkpdf.sh /app/scripts/shrinkpdf.sh
+
 USER app
 
 EXPOSE 3000
