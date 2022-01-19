@@ -6,10 +6,12 @@ services:
     # Custom base root
     command: "gotenberg --api-root-path=/pdf-gotenberg/ --api-timeout=600s --unoconv-disable-listener=true"
     shm_size: "4gb"
+    restart: always
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: always
     environment:
       - API_ROOT=/pdf-gotenberg
     ports:
