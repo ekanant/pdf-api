@@ -40,6 +40,7 @@ func main() {
 		//Send request to gotenberg
 		gotenbergUrl := "http://gotenberg:3000" + reqURI
 		response, responseHeaders, err := proxyToGotenberg(gotenbergUrl, reqContentType, reqBody)
+		defer response.Close()
 		//Set with header from gotenberg response
 		for k, v := range responseHeaders {
 			c.Set(k, v)
@@ -76,10 +77,19 @@ func main() {
 				originalPdfFilePath := "tmp/" + pdfFileName
 				compressPdfFilePath := "tmp/compress_" + pdfFileName
 
-				//Write file for compress process
-				err = os.WriteFile(originalPdfFilePath, response, 0644)
-				if err != nil {
-					logs.Error(fmt.Sprintf("save tmp_file err, pdf_name=%s, error=%s", pdfFileName, err))
+				{
+					//Write file for compress process
+					//open a file for writing
+					file, err := os.Create(originalPdfFilePath)
+					if err != nil {
+						logs.Error(fmt.Sprintf("create empty tmp_file err, pdf_name=%s, error=%s", pdfFileName, err))
+					}
+					defer file.Close()
+
+					_, err = io.Copy(file, response)
+					if err != nil {
+						logs.Error(fmt.Sprintf("save tmp_file err, pdf_name=%s, error=%s", pdfFileName, err))
+					}
 				}
 
 				//Compress pdf
@@ -110,19 +120,18 @@ func main() {
 			}
 		}
 
-		return c.Send(response)
+		return c.SendStream(response)
 	})
 
 	app.Listen(":3000")
 }
 
-func proxyToGotenberg(gotenbergUrl string, requestContentType string, requestBody []byte) ([]byte, map[string]string, error) {
+func proxyToGotenberg(gotenbergUrl string, requestContentType string, requestBody []byte) (io.ReadCloser, map[string]string, error) {
 	resp, err := httpClient.Post(gotenbergUrl, requestContentType, bytes.NewReader(requestBody))
 	if err != nil {
 		// handle error
 		logs.Error(fmt.Sprintf("send to gotenburg error=%s", err))
 	}
-	defer resp.Body.Close()
 
 	responseHeaders := map[string]string{}
 
@@ -130,6 +139,5 @@ func proxyToGotenberg(gotenbergUrl string, requestContentType string, requestBod
 		responseHeaders[k] = v[0]
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	return body, responseHeaders, err
+	return resp.Body, responseHeaders, err
 }
