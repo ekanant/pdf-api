@@ -7,6 +7,10 @@ services:
     command: "gotenberg --api-root-path=/pdf-gotenberg/ --api-timeout=600s --unoconv-disable-listener=true"
     shm_size: "4gb"
     restart: always
+    logging:
+      options:
+        max-size: "512m"
+        max-file: "7"
   app:
     build:
       context: .
@@ -16,3 +20,7 @@ services:
       - API_ROOT=/pdf-gotenberg
     ports:
       - "3000:3000"
+    logging:
+      options:
+        max-size: "512m"
+        max-file: "7"
