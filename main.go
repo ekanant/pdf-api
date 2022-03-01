@@ -22,7 +22,9 @@ func main() {
 
 	appBasePath := os.Getenv("API_ROOT")
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		BodyLimit: 250 * 1024 * 1024,
+	})
 	router := app.Group(appBasePath)
 	router.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(map[string]interface{}{
