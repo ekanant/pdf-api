@@ -42,71 +42,86 @@ func main() {
 		//Send request to gotenberg
 		gotenbergUrl := "http://gotenberg:3000" + reqURI
 		response, responseHeaders, err := proxyToGotenberg(gotenbergUrl, reqContentType, reqBody)
-		defer response.Close()
-		//Set with header from gotenberg response
-		for k, v := range responseHeaders {
-			c.Set(k, v)
-		}
 		if err != nil {
 			return c.JSON(map[string]interface{}{
 				"error": err,
 			})
 		}
+		defer response.Close()
 
-		{
-			//Compress pdf with ghostscript
-			pdfFileName := ""
-			for k, v := range responseHeaders {
-				c.Set(k, v)
+		//Set with header from gotenberg response
+		for k, v := range responseHeaders {
+			c.Set(k, v)
+		}
 
-				if k == "Content-Disposition" {
-					//Get pdf filename for create tmp file
-					_, params, _ := mime.ParseMediaType(v)
-					pdfFileName = params["filename"]
+		pdfFileName := ""
+		originalPdfFilePath := ""
+
+		//Get current pdf file name
+		for k, v := range responseHeaders {
+			if k == "Content-Disposition" {
+				//Get pdf filename for create tmp file
+				_, params, _ := mime.ParseMediaType(v)
+				pdfFileName = params["filename"]
+			}
+		}
+
+		if pdfFileName != "" {
+			_, err := os.Stat("tmp")
+			if os.IsNotExist(err) {
+				//Create tmp folder if not exist
+				err := os.Mkdir("tmp", 0700)
+				if err != nil {
+					logs.Error(fmt.Sprintf("create tmp folder error, pdf_name=%s, error=%s", pdfFileName, err))
 				}
 			}
 
-			if pdfFileName != "" {
-				_, err := os.Stat("tmp")
-				if os.IsNotExist(err) {
-					//Create tmp folder if not exist
-					err := os.Mkdir("tmp", 0700)
-					if err != nil {
-						logs.Error(fmt.Sprintf("create tmp folder error, pdf_name=%s, error=%s", pdfFileName, err))
-					}
-				}
+			originalPdfFilePath = "tmp/" + pdfFileName
 
-				originalPdfFilePath := "tmp/" + pdfFileName
+		}
+
+		if originalPdfFilePath != "" {
+			//Write file for return or compress it before return
+			//open a file for writing
+			file, err := os.Create(originalPdfFilePath)
+			if err != nil {
+				logs.Error(fmt.Sprintf("create empty tmp_file err, pdf_name=%s, error=%s", pdfFileName, err))
+				return c.JSON(map[string]interface{}{
+					"error": err,
+				})
+			}
+			defer file.Close()
+
+			_, err = io.Copy(file, response)
+			if err != nil {
+				logs.Error(fmt.Sprintf("save tmp_file err, pdf_name=%s, error=%s", pdfFileName, err))
+				return c.JSON(map[string]interface{}{
+					"error": err,
+				})
+			}
+
+			defer func() {
+				//Delete original file
+				err = os.Remove(originalPdfFilePath)
+				if err != nil {
+					logs.Error(fmt.Sprintf("cannot remove tmp_file err, pdf_name=%s, error=%s", pdfFileName, err))
+				}
+			}()
+		}
+
+		if pdfFileName != "" {
+			//Check compressedFlag
+			if c.FormValue("compressPdf") == "1" {
+				//Compress pdf with ghostscript
 				compressPdfFilePath := "tmp/compress_" + pdfFileName
-
-				{
-					//Write file for compress process
-					//open a file for writing
-					file, err := os.Create(originalPdfFilePath)
-					if err != nil {
-						logs.Error(fmt.Sprintf("create empty tmp_file err, pdf_name=%s, error=%s", pdfFileName, err))
-					}
-					defer file.Close()
-
-					_, err = io.Copy(file, response)
-					if err != nil {
-						logs.Error(fmt.Sprintf("save tmp_file err, pdf_name=%s, error=%s", pdfFileName, err))
-					}
-				}
-
-				//Compress pdf
 				pdfDpi := 350
 				out, err := exec.Command(`/bin/sh`, `-c`, fmt.Sprintf(`sh ./scripts/shrinkpdf.sh %s %s %d`, originalPdfFilePath, compressPdfFilePath, pdfDpi)).Output()
 				if err != nil {
 					logs.Error(fmt.Sprintf("compress pdf err, pdf_name=%s, out=%s, error=%s", pdfFileName, out, err))
+					return c.JSON(map[string]interface{}{
+						"error": err,
+					})
 				}
-				defer func() {
-					//Delete original file
-					err = os.Remove(originalPdfFilePath)
-					if err != nil {
-						logs.Error(fmt.Sprintf("cannot remove tmp_file err, pdf_name=%s, error=%s", pdfFileName, err))
-					}
-				}()
 
 				defer func() {
 					//Delete compress file
@@ -118,7 +133,8 @@ func main() {
 
 				//Read compress pdf byte
 				return c.SendFile(compressPdfFilePath)
-
+			} else {
+				return c.SendFile(originalPdfFilePath)
 			}
 		}
 
