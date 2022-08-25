@@ -1,7 +1,7 @@
 ###############################################################################
 # Step 1 : Builder image
 #
-FROM golang:1.17.6-alpine3.15 AS builder
+FROM golang:1.19.0-alpine3.16 AS builder
 
 ENV GO111MODULE=on
 ENV GOOS=linux
@@ -16,7 +16,7 @@ RUN go build -o="./out/app_program"
 ############################
 # STEP 2 build a production image
 ############################
-FROM alpine:3.13.5
+FROM alpine:3.16.2
 
 #Install dependencies
 RUN apk --no-cache add ghostscript 
